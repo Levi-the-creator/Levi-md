@@ -23,7 +23,7 @@ if (!config.owner) {
     const owner = readlineSync.question('Enter your WhatsApp number (with country code): ');
     config.owner = owner;
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-    console.log(`Owner saved: ${config.owner}`);
+    console.log(`✅ Owner number saved: ${config.owner}`);
 }
 
 async function startBot() {
@@ -33,7 +33,6 @@ async function startBot() {
     const sock = makeWASocket({
         version,
         logger: P({ level: 'info' }),
-        printQRInTerminal: true, // QR fallback (if pairing fails)
         auth: state,
         browser: ['BOOGIEMAN', 'Chrome', '1.0']
     });
@@ -63,6 +62,7 @@ async function startBot() {
         // Show pairing code if available
         if (pairingCode) {
             console.log('🔑 Your WhatsApp Pairing Code:', pairingCode);
+            console.log('👉 Open WhatsApp > Linked devices > Link with phone number, then enter this code.');
         }
     });
 
