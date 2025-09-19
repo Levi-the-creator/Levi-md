@@ -1,12 +1,15 @@
 {
-    "name": "levi-md",
-    "version": "1.0.0",
-    "main": "index.js",
-    "scripts": {
-        "start": "node index.js"
-    },
-    "dependencies": {
-        "whatsapp-web.js": "^1.23.0",
-        "qrcode-terminal": "^0.12.0"
-    }
+  "name": "BOOGIEMAN",
+  "version": "1.0.0",
+  "description": "BOOGIEMAN – the nightmare in your pocket, a fun and spooky WhatsApp bot with games, battles, and chaos.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.8",
+    "pino": "^8.17.0",
+    "readline-sync": "^1.4.10"
+  }
 }
