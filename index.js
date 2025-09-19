@@ -1,77 +1,85 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys"
-import pino from "pino"
-import fs from "fs"
-import readlineSync from "readline-sync"
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion,
+    DisconnectReason
+} = require('@whiskeysockets/baileys');
+const P = require('pino');
+const fs = require('fs');
+const readlineSync = require('readline-sync');
 
-// === LOAD CONFIG ===
-const CONFIG_FILE = "./config.json"
-let config = { owner: "" }
+const SESSION_DIR = './session';
+const CONFIG_FILE = './config.json';
 
+// Ensure session folder exists
+if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR);
+
+// Load or create config.json
+let config = {};
 if (fs.existsSync(CONFIG_FILE)) {
-    config = JSON.parse(fs.readFileSync(CONFIG_FILE))
+    config = JSON.parse(fs.readFileSync(CONFIG_FILE));
 }
-
-// If no owner number, ask user once and save
 if (!config.owner) {
-    const number = readlineSync.question("2348162332857")
-    config.owner = number
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2))
-    console.log(`✅ Owner number saved: ${config.owner}`)
+    const owner = readlineSync.question('Enter your WhatsApp number (with country code): ');
+    config.owner = owner;
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    console.log(`Owner saved: ${config.owner}`);
 }
 
-const OWNER_NUMBER = config.owner
-const SESSION_FOLDER = "./session"
-
-// === START BOT ===
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState(SESSION_FOLDER)
-    const { version } = await fetchLatestBaileysVersion()
-    
+    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+    const { version } = await fetchLatestBaileysVersion();
+
     const sock = makeWASocket({
         version,
-        logger: pino({ level: "silent" }),
-        printQRInTerminal: true,
+        logger: P({ level: 'info' }),
+        printQRInTerminal: true, // QR fallback (if pairing fails)
         auth: state,
-        browser: ["BOOGIEMAN", "Chrome", "20.0.04"],
-    })
+        browser: ['BOOGIEMAN', 'Chrome', '1.0']
+    });
 
-    sock.ev.on("creds.update", saveCreds)
+    // Save session
+    sock.ev.on('creds.update', saveCreds);
 
-    // Pairing Code login
-    if (!sock.authState.creds.registered) {
-        const code = await sock.requestPairingCode(OWNER_NUMBER)
-        console.log(`📲 Pairing code for ${OWNER_NUMBER}: ${code}`)
-    }
+    // Handle connection updates
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, pairingCode } = update;
 
-    // Connection handling
-    sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect } = update
-        if (connection === "close") {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                startBot()
+        if (connection === 'open') {
+            console.log('✅ Connected to WhatsApp as', config.owner);
+        }
+
+        if (connection === 'close') {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason === DisconnectReason.loggedOut) {
+                console.log('❌ Logged out. Delete session and restart.');
+                process.exit();
             } else {
-                console.log("❌ Logged out. Delete /session and re-run.")
+                console.log('⚠️ Connection closed. Reconnecting...');
+                startBot();
             }
-        } else if (connection === "open") {
-            console.log("🤖 BOOGIEMAN is online!")
-        }
-    })
-
-    // Basic commands
-    sock.ev.on("messages.upsert", async ({ messages }) => {
-        const msg = messages[0]
-        if (!msg.message) return
-        const from = msg.key.remoteJid
-        const body = msg.message.conversation || msg.message.extendedTextMessage?.text || ""
-
-        if (body.startsWith("!ping")) {
-            await sock.sendMessage(from, { text: "pong 🏓" })
         }
 
-        if (body.startsWith("!owner")) {
-            await sock.sendMessage(from, { text: `My master is wa.me/${OWNER_NUMBER}` })
+        // Show pairing code if available
+        if (pairingCode) {
+            console.log('🔑 Your WhatsApp Pairing Code:', pairingCode);
         }
-    })
+    });
+
+    // Message handler
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const text =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text ||
+            '';
+
+        if (text === '!ping') {
+            await sock.sendMessage(msg.key.remoteJid, { text: 'Pong!' });
+        }
+    });
 }
 
-startBot()
+startBot();
